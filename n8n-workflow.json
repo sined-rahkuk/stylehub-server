@@ -1,0 +1,70 @@
+{
+  "name": "StyleHub 11labs Integration",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stylehub-webhook",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "11labs Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "stylehub-elevenlabs"
+    },
+    {
+      "parameters": {
+        "functionCode": "const callData = items[0].json.body.data;\n\nconst transcript = callData.transcript || [];\nconst analysis = callData.analysis || {};\nconst metadata = callData.metadata || {};\n\nconst callSummary = analysis.transcript_summary || 'No analysis available';\n\nlet success = false;\nif (analysis.call_successful === 'success') {\n  success = true;\n}\n\nlet callType = 'general';\nlet orderId = null;\nlet rmaNumber = null;\n\nconst toolMessages = transcript.filter(msg => msg.tool_calls && msg.tool_calls.length > 0);\n\nif (toolMessages.length > 0) {\n  const firstToolCall = toolMessages[0].tool_calls[0];\n  const toolName = firstToolCall.tool_name || firstToolCall.name;\n  \n  if (toolName === 'lookupOrder') {\n    callType = 'order_lookup';\n    try {\n      const args = JSON.parse(firstToolCall.params_as_json || firstToolCall.arguments);\n      orderId = args.orderId;\n    } catch (e) {\n      const allText = transcript.map(msg => msg.message).join(' ');\n      const match = allText.match(/\\b\\d{3}\\b/);\n      orderId = match ? match[0] : null;\n    }\n  } else if (toolName === 'processReturn') {\n    callType = 'return_request';\n    try {\n      const args = JSON.parse(firstToolCall.params_as_json || firstToolCall.arguments);\n      orderId = args.orderId;\n    } catch (e) {\n      const allText = transcript.map(msg => msg.message).join(' ');\n      const match = allText.match(/\\b\\d{3}\\b/);\n      orderId = match ? match[0] : null;\n    }\n    \n    for (const msg of transcript) {\n      if (msg.tool_results && msg.tool_results.length > 0) {\n        for (const result of msg.tool_results) {\n          if (result.tool_name === \"processReturn\" && result.result_value) {\n            try {\n              const resultObj = JSON.parse(result.result_value);\n              if (resultObj.rmaNumber) {\n                rmaNumber = resultObj.rmaNumber;\n                break;\n              }\n            } catch (e) {}\n          }\n        }\n      }\n      if (rmaNumber) break;\n    }\n    \n    if (!rmaNumber) {\n      const allText = transcript.map(msg => msg.message).join(' ');\n      const rmaMatch = allText.match(/RMA[:\\-\\s]*(\\w+)/i);\n      rmaNumber = rmaMatch ? rmaMatch[1] : null;\n    }\n  }\n}\n\nlet timestamp;\nif (metadata.start_time_unix_secs) {\n  timestamp = new Date(metadata.start_time_unix_secs * 1000).toISOString();\n} else {\n  timestamp = new Date().toISOString();\n}\n\nconst duration = metadata.call_duration_secs || 0;\n\nreturn {\n  json: {\n    callType: callType,\n    success: success,\n    orderId: orderId,\n    rmaNumber: rmaNumber,\n    analysis: callSummary,\n    duration: Math.round(duration),\n    timestamp: timestamp,\n    source: 'elevenlabs'\n  }\n};"
+      },
+      "id": "process-call-data",
+      "name": "Process Call Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://3b5a-88-212-18-142.ngrok-free.app/webhook/call-analysis",
+        "options": {
+          "headers": {
+            "ngrok-skip-browser-warning": "true"
+          }
+        }
+      },
+      "id": "send-to-server",
+      "name": "Send to StyleHub Server",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Call Analysis Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Call Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Call Data": {
+      "main": [
+        [
+          {
+            "node": "Send to StyleHub Server",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+      "id": "stylehub-elevenlabs-integration"
+} 

@@ -1,0 +1,34 @@
+[
+  {
+    "orderId": "001",
+    "customerEmail": "sarah@email.com",
+    "customerName": "Sarah Johnson",
+    "status": "delivered",
+    "trackingNumber": "TRK123456",
+    "item": "Black Leather Jacket",
+    "total": 299.99,
+    "orderDate": "2024-06-20",
+    "deliveryDate": "2024-06-25"
+  },
+  {
+    "orderId": "002",
+    "customerEmail": "mike@email.com",
+    "customerName": "Mike Chen",
+    "status": "shipped",
+    "trackingNumber": "TRK123457",
+    "item": "Blue Sweater",
+    "total": 149.99,
+    "orderDate": "2024-06-24",
+    "estimatedDelivery": "2024-06-28"
+  },
+  {
+    "orderId": "003",
+    "customerEmail": "emma@email.com",
+    "customerName": "Emma Davis",
+    "status": "processing",
+    "trackingNumber": null,
+    "item": "Summer Dress",
+    "total": 89.99,
+    "orderDate": "2024-06-26"
+  }
+] 

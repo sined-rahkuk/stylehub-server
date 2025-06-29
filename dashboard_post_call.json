@@ -1,0 +1,579 @@
+{
+  "name": "dashboard post call",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stylehub-webhook",
+        "options": {}
+      },
+      "id": "b9316eec-b8a9-4fe7-9b4b-47eecee8538e",
+      "name": "Call Analysis Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        720,
+        -380
+      ],
+      "webhookId": "stylehub-call-analysis"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://3b5a-88-212-18-142.ngrok-free.app/webhook/call-analysis",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n   \"callType\": \"{{ $json.callType }}\",\n   \"success\": {{ $json.success }},\n   \"orderId\": {{ $json.orderId ? '\"' + $json.orderId + '\"' : null }},\n   \"rmaNumber\": {{ $json.rmaNumber ? '\"' + $json.rmaNumber + '\"' : null }},\n   \"analysis\": \"{{ $json.analysis }}\",\n   \"duration\": {{ $json.duration }},\n   \"timestamp\": \"{{ $json.timestamp }}\",\n   \"source\": \"{{ $json.source }}\",\n   \"vapiCallId\": {{ $json.vapiCallId ? '\"' + $json.vapiCallId + '\"' : null }},\n   \"endedReason\": {{ $json.endedReason ? '\"' + $json.endedReason + '\"' : null }},\n   \"cost\": {{ $json.cost }}\n}",
+        "options": {}
+      },
+      "id": "3e521ca4-c6de-4cb5-b524-5a8eff1a9e10",
+      "name": "Send to Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1620,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "const callData = items[0].json.body.data;\n\nconst transcript = callData.transcript || [];\nconst analysis = callData.analysis || {};\nconst metadata = callData.metadata || {};\n\nconst callSummary = analysis.transcript_summary || 'No analysis available';\n\nlet success = false;\nif (analysis.call_successful === 'success') {\n  success = true;\n}\n\nlet callType = 'general';\nlet orderId = null;\nlet rmaNumber = null;\n\n// Find tool calls\nconst toolMessages = transcript.filter(msg => msg.tool_calls && msg.tool_calls.length > 0);\n\nif (toolMessages.length > 0) {\n  const firstToolCall = toolMessages[0].tool_calls[0];\n  // For ElevenLabs, the tool name is under 'tool_name' and params under 'params_as_json'\n  const toolName = firstToolCall.tool_name || firstToolCall.name;\n  \n  if (toolName === 'lookupOrder') {\n    callType = 'order_lookup';\n    try {\n      const args = JSON.parse(firstToolCall.params_as_json || firstToolCall.arguments);\n      orderId = args.orderId;\n    } catch (e) {\n      const allText = transcript.map(msg => msg.message).join(' ');\n      const match = allText.match(/\\b\\d{3}\\b/);\n      orderId = match ? match[0] : null;\n    }\n  } else if (toolName === 'processReturn') {\n    callType = 'return_request';\n    try {\n      const args = JSON.parse(firstToolCall.params_as_json || firstToolCall.arguments);\n      orderId = args.orderId;\n    } catch (e) {\n      const allText = transcript.map(msg => msg.message).join(' ');\n      const match = allText.match(/\\b\\d{3}\\b/);\n      orderId = match ? match[0] : null;\n    }\n    \n    // Extract RMA number from tool results, not from text\n    const toolResultMessages = transcript.filter(msg => msg.tool_results && msg.tool_results.length > 0);\n    if (toolResultMessages.length > 0) {\n      const toolResult = toolResultMessages[0].tool_results[0];\n      if (toolResult.result_value) {\n        try {\n          const resultData = JSON.parse(toolResult.result_value);\n          rmaNumber = resultData.rmaNumber || null;\n        } catch (e) {\n          // Fallback to text search if JSON parsing fails\n          const allText = transcript.map(msg => msg.message).join(' ');\n          const rmaMatch = allText.match(/RMA[:\\-\\s]*(\\w+)/i);\n          rmaNumber = rmaMatch ? rmaMatch[1] : null;\n        }\n      }\n    }\n  }\n}\n\nlet timestamp;\nif (metadata.start_time_unix_secs) {\n  timestamp = new Date(metadata.start_time_unix_secs * 1000).toISOString();\n} else {\n  timestamp = new Date().toISOString();\n}\n\nconst duration = metadata.call_duration_secs || 0;\nconst cost = metadata.cost || 0;\nconst vapiCallId = callData.conversation_id || null;\nconst endedReason = metadata.termination_reason || 'unknown';\n\nreturn {\n  json: {\n    callType: callType,\n    success: success,\n    orderId: orderId,\n    rmaNumber: rmaNumber,\n    analysis: callSummary,\n    duration: Math.round(duration),\n    timestamp: timestamp,\n    source: 'elevenlabs',\n    vapiCallId: vapiCallId,\n    endedReason: endedReason,\n    cost: cost\n  }\n};"
+      },
+      "id": "6a25966a-4264-4d29-ae10-e0b2b154f76d",
+      "name": "Process Call Data1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1140,
+        -380
+      ]
+    }
+  ],
+  "pinData": {
+    "Call Analysis Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv840889.hstgr.cloud",
+            "user-agent": "Python/3.12 aiohttp/3.11.16",
+            "content-length": "9346",
+            "accept": "*/*",
+            "accept-encoding": "gzip, deflate",
+            "content-type": "application/json",
+            "elevenlabs-signature": "t=1751221792,v0=98a5dbd57b378483ed1977db29d215ada97455f5dd1e027de3b08b21b0313871",
+            "x-forwarded-for": "34.59.11.47",
+            "x-forwarded-host": "n8n.srv840889.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "550fb19781fe",
+            "x-real-ip": "34.59.11.47"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "type": "post_call_transcription",
+            "event_timestamp": 1751221792,
+            "data": {
+              "agent_id": "agent_01jyybv1q6ezpbt70r4g56kd5c",
+              "conversation_id": "conv_01jyyf4czvf5wrpt34jyyh843r",
+              "status": "done",
+              "transcript": [
+                {
+                  "role": "agent",
+                  "message": "Hi! I'm Alex from StyleHub customer support. I can help you check your order status or process a return. How can I assist you today?",
+                  "tool_calls": [],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 0,
+                  "conversation_turn_metrics": null,
+                  "rag_retrieval_info": null,
+                  "llm_usage": null,
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": null
+                },
+                {
+                  "role": "user",
+                  "message": "Hi, Alex. I would like to return an item.",
+                  "tool_calls": [],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 11,
+                  "conversation_turn_metrics": null,
+                  "rag_retrieval_info": null,
+                  "llm_usage": null,
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": "audio"
+                },
+                {
+                  "role": "agent",
+                  "message": "I'm sorry that didn't work out as expected. Could you please provide the order number for the item you'd like to return?",
+                  "tool_calls": [],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 18,
+                  "conversation_turn_metrics": {
+                    "metrics": {
+                      "convai_llm_service_ttf_sentence": {
+                        "elapsed_time": 2.70647464832291
+                      },
+                      "convai_llm_service_ttfb": {
+                        "elapsed_time": 2.6327749923802912
+                      }
+                    }
+                  },
+                  "rag_retrieval_info": null,
+                  "llm_usage": {
+                    "model_usage": {
+                      "gpt-4.1": {
+                        "input": {
+                          "tokens": 115,
+                          "price": 0.00023
+                        },
+                        "input_cache_read": {
+                          "tokens": 1024,
+                          "price": 0.000512
+                        },
+                        "input_cache_write": {
+                          "tokens": 0,
+                          "price": 0
+                        },
+                        "output_total": {
+                          "tokens": 25,
+                          "price": 0.0002
+                        }
+                      }
+                    }
+                  },
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": null
+                },
+                {
+                  "role": "user",
+                  "message": "Right. So, I would like to return 001.",
+                  "tool_calls": [],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 27,
+                  "conversation_turn_metrics": null,
+                  "rag_retrieval_info": null,
+                  "llm_usage": null,
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": "audio"
+                },
+                {
+                  "role": "agent",
+                  "message": "Thank you for providing the order number. Could you please let me know the reason for the return? For example, is it due to a size issue, a defect, receiving the wrong...",
+                  "tool_calls": [],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 33,
+                  "conversation_turn_metrics": {
+                    "metrics": {
+                      "convai_llm_service_ttf_sentence": {
+                        "elapsed_time": 0.6165939304046333
+                      },
+                      "convai_llm_service_ttfb": {
+                        "elapsed_time": 0.5860882173292339
+                      }
+                    }
+                  },
+                  "rag_retrieval_info": null,
+                  "llm_usage": {
+                    "model_usage": {
+                      "gpt-4.1": {
+                        "input": {
+                          "tokens": 31,
+                          "price": 0.000062
+                        },
+                        "input_cache_read": {
+                          "tokens": 1152,
+                          "price": 0.000576
+                        },
+                        "input_cache_write": {
+                          "tokens": 0,
+                          "price": 0
+                        },
+                        "output_total": {
+                          "tokens": 44,
+                          "price": 0.000352
+                        }
+                      }
+                    }
+                  },
+                  "interrupted": true,
+                  "original_message": "Thank you for providing the order number. Could you please let me know the reason for the return? For example, is it due to a size issue, a defect, receiving the wrong item, or something else?",
+                  "source_medium": null
+                },
+                {
+                  "role": "user",
+                  "message": "Yeah it's size.",
+                  "tool_calls": [],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 41,
+                  "conversation_turn_metrics": null,
+                  "rag_retrieval_info": null,
+                  "llm_usage": null,
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": "audio"
+                },
+                {
+                  "role": "agent",
+                  "message": null,
+                  "tool_calls": [
+                    {
+                      "type": "webhook",
+                      "request_id": "call_VtMxSxd0j4zYURggC6Q4zSsp",
+                      "tool_name": "processReturn",
+                      "params_as_json": "{\"orderId\":\"001\",\"reason\":\"size issue\"}",
+                      "tool_has_been_called": true,
+                      "tool_details": {
+                        "type": "webhook",
+                        "method": "POST",
+                        "url": "https://3b5a-88-212-18-142.ngrok-free.app/api/returns",
+                        "headers": {
+                          "ngrok-skip-browser-warning": "true"
+                        },
+                        "path_params": {},
+                        "query_params": {},
+                        "body": "{\"orderId\": \"001\", \"reason\": \"size issue\"}"
+                      }
+                    }
+                  ],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 44,
+                  "conversation_turn_metrics": null,
+                  "rag_retrieval_info": null,
+                  "llm_usage": null,
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": null
+                },
+                {
+                  "role": "agent",
+                  "message": null,
+                  "tool_calls": [],
+                  "tool_results": [
+                    {
+                      "type": "webhook",
+                      "request_id": "call_VtMxSxd0j4zYURggC6Q4zSsp",
+                      "tool_name": "processReturn",
+                      "result_value": "{\"success\":true,\"rmaNumber\":\"RMA-001\",\"orderId\":\"001\",\"refundAmount\":299.99,\"status\":\"approved\"}",
+                      "is_error": false,
+                      "tool_has_been_called": true,
+                      "tool_latency_secs": 0.37230206513777375
+                    }
+                  ],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 44,
+                  "conversation_turn_metrics": null,
+                  "rag_retrieval_info": null,
+                  "llm_usage": null,
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": null
+                },
+                {
+                  "role": "agent",
+                  "message": "I've processed your return request. Your RMA number is RMA zero zero one. Please package the item securely and include this RMA number. Is there anything else I can help you with regarding your order or another return?",
+                  "tool_calls": [],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 44,
+                  "conversation_turn_metrics": {
+                    "metrics": {
+                      "convai_llm_service_ttf_sentence": {
+                        "elapsed_time": 0.4972758120857179
+                      },
+                      "convai_llm_service_ttfb": {
+                        "elapsed_time": 0.47186120320111513
+                      }
+                    }
+                  },
+                  "rag_retrieval_info": null,
+                  "llm_usage": {
+                    "model_usage": {
+                      "gpt-4.1": {
+                        "input": {
+                          "tokens": 220,
+                          "price": 0.00043999999999999996
+                        },
+                        "input_cache_read": {
+                          "tokens": 2304,
+                          "price": 0.001152
+                        },
+                        "input_cache_write": {
+                          "tokens": 0,
+                          "price": 0
+                        },
+                        "output_total": {
+                          "tokens": 66,
+                          "price": 0.000528
+                        }
+                      }
+                    }
+                  },
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": null
+                },
+                {
+                  "role": "user",
+                  "message": "Actually no that's all thanks.",
+                  "tool_calls": [],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 59,
+                  "conversation_turn_metrics": null,
+                  "rag_retrieval_info": null,
+                  "llm_usage": null,
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": "audio"
+                },
+                {
+                  "role": "agent",
+                  "message": "You're welcome! If you need help with another order status or return in the future, feel free to reach out. Have a great day!",
+                  "tool_calls": [],
+                  "tool_results": [],
+                  "feedback": null,
+                  "llm_override": null,
+                  "time_in_call_secs": 62,
+                  "conversation_turn_metrics": {
+                    "metrics": {
+                      "convai_llm_service_ttf_sentence": {
+                        "elapsed_time": 0.6341625531204045
+                      },
+                      "convai_llm_service_ttfb": {
+                        "elapsed_time": 0.6143875261768699
+                      }
+                    }
+                  },
+                  "rag_retrieval_info": null,
+                  "llm_usage": {
+                    "model_usage": {
+                      "gpt-4.1": {
+                        "input": {
+                          "tokens": 1350,
+                          "price": 0.0027
+                        },
+                        "input_cache_read": {
+                          "tokens": 0,
+                          "price": 0
+                        },
+                        "input_cache_write": {
+                          "tokens": 0,
+                          "price": 0
+                        },
+                        "output_total": {
+                          "tokens": 29,
+                          "price": 0.000232
+                        }
+                      }
+                    }
+                  },
+                  "interrupted": false,
+                  "original_message": null,
+                  "source_medium": null
+                }
+              ],
+              "metadata": {
+                "start_time_unix_secs": 1751221679,
+                "accepted_time_unix_secs": 1751221679,
+                "call_duration_secs": 81,
+                "cost": 498,
+                "deletion_settings": {
+                  "deletion_time_unix_secs": null,
+                  "deleted_logs_at_time_unix_secs": null,
+                  "deleted_audio_at_time_unix_secs": null,
+                  "deleted_transcript_at_time_unix_secs": null,
+                  "delete_transcript_and_pii": false,
+                  "delete_audio": false
+                },
+                "feedback": {
+                  "overall_score": null,
+                  "likes": 0,
+                  "dislikes": 0
+                },
+                "authorization_method": "authorization_header",
+                "charging": {
+                  "dev_discount": true,
+                  "is_burst": false,
+                  "tier": "free",
+                  "llm_usage": {
+                    "irreversible_generation": {
+                      "model_usage": {
+                        "gpt-4.1": {
+                          "input": {
+                            "tokens": 1716,
+                            "price": 0.003432
+                          },
+                          "input_cache_read": {
+                            "tokens": 4480,
+                            "price": 0.00224
+                          },
+                          "input_cache_write": {
+                            "tokens": 0,
+                            "price": 0
+                          },
+                          "output_total": {
+                            "tokens": 164,
+                            "price": 0.001312
+                          }
+                        }
+                      }
+                    },
+                    "initiated_generation": {
+                      "model_usage": {
+                        "gpt-4.1": {
+                          "input": {
+                            "tokens": 1716,
+                            "price": 0.003432
+                          },
+                          "input_cache_read": {
+                            "tokens": 4480,
+                            "price": 0.0022400000000000002
+                          },
+                          "input_cache_write": {
+                            "tokens": 0,
+                            "price": 0
+                          },
+                          "output_total": {
+                            "tokens": 164,
+                            "price": 0.001312
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "llm_price": 0.006984,
+                  "llm_charge": 72,
+                  "call_charge": 426
+                },
+                "phone_call": null,
+                "batch_call": null,
+                "termination_reason": "Client disconnected",
+                "error": null,
+                "main_language": "en",
+                "rag_usage": null,
+                "text_only": false,
+                "features_usage": {
+                  "language_detection": {
+                    "enabled": false,
+                    "used": false
+                  },
+                  "transfer_to_agent": {
+                    "enabled": false,
+                    "used": false
+                  },
+                  "transfer_to_number": {
+                    "enabled": false,
+                    "used": false
+                  },
+                  "multivoice": {
+                    "enabled": false,
+                    "used": false
+                  },
+                  "pii_zrm_workspace": false,
+                  "pii_zrm_agent": false
+                }
+              },
+              "analysis": {
+                "evaluation_criteria_results": {},
+                "data_collection_results": {},
+                "call_successful": "success",
+                "transcript_summary": "The user contacted StyleHub customer support to return an item from order 001 due to a size issue. The agent processed the return, providing RMA number RMA-001 and refund amount of $299.99. The user confirmed that was all and the agent ended the conversation.\n"
+              },
+              "conversation_initiation_client_data": {
+                "conversation_config_override": {
+                  "tts": {
+                    "voice_id": null
+                  },
+                  "conversation": {
+                    "text_only": null
+                  },
+                  "agent": {
+                    "first_message": null,
+                    "language": null,
+                    "prompt": null
+                  }
+                },
+                "custom_llm_extra_body": {},
+                "dynamic_variables": {
+                  "system__agent_id": "agent_01jyybv1q6ezpbt70r4g56kd5c",
+                  "system__conversation_id": "conv_01jyyf4czvf5wrpt34jyyh843r",
+                  "system__caller_id": null,
+                  "system__called_number": null,
+                  "system__call_duration_secs": 81,
+                  "system__time_utc": "2025-06-29T18:29:20.200859+00:00",
+                  "system__call_sid": null
+                }
+              }
+            }
+          },
+          "webhookUrl": "https://n8n.srv840889.hstgr.cloud/webhook/stylehub-webhook",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Call Analysis Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Call Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Call Data1": {
+      "main": [
+        [
+          {
+            "node": "Send to Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c492c10f-3c7d-481f-81ee-b7a267dec3f2",
+  "meta": {
+    "instanceId": "0590e88761a00cbdb106444a2052d8ac5e0440f6ef7fc98f6f9f9ba5f602b39c"
+  },
+  "id": "bJJnfqm3mrlL1ycF",
+  "tags": []
+}
