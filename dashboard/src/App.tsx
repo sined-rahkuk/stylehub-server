@@ -12,13 +12,18 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : false;
   });
 
+  // API Base URL - Use environment variable or default to Render deployment
+  const API_BASE_URL =
+    process.env.REACT_APP_API_URL ||
+    "https://stylehub-server-lgna.onrender.com";
+
   // Fetch data from our API
   const fetchData = async () => {
     try {
       setLoading(true);
       const [callsResponse, statsResponse] = await Promise.all([
-        fetch("/api/dashboard/calls"),
-        fetch("/api/dashboard/stats"),
+        fetch(`${API_BASE_URL}/api/dashboard/calls`),
+        fetch(`${API_BASE_URL}/api/dashboard/stats`),
       ]);
 
       if (!callsResponse.ok || !statsResponse.ok) {
@@ -189,10 +194,15 @@ const App: React.FC = () => {
               <h4>🧪 Test the system:</h4>
               <ol>
                 <li>
-                  Set up ngrok: <code>ngrok http 3000</code>
+                  Run test script: <code>node test-scripts/test-apis.js</code>
                 </li>
-                <li>Configure 11labs with your ngrok URL</li>
-                <li>Make a test call and ask about order 001</li>
+                <li>
+                  Configure n8n to send to:{" "}
+                  <code>
+                    https://stylehub-server-lgna.onrender.com/webhook/call-analysis
+                  </code>
+                </li>
+                <li>Make a test call via 11labs and ask about order 001</li>
                 <li>Watch the data appear here in real-time!</li>
               </ol>
             </div>

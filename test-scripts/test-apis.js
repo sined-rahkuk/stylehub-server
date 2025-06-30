@@ -2,8 +2,9 @@
 // Tests work with 11labs backend - source field set to 'test' for test data
 const https = require("https");
 const http = require("http");
+const { URL } = require("url");
 
-const SERVER_URL = "http://localhost:3000";
+const SERVER_URL = "https://stylehub-server-lgna.onrender.com";
 
 // Generate realistic timestamps (spread over the last 2 hours)
 function generateTestTimestamps() {
@@ -108,21 +109,24 @@ function getTestCalls() {
   ];
 }
 
-// Function to make HTTP requests
+// Function to make HTTP/HTTPS requests
 function makeRequest(method, path, data = null) {
   return new Promise((resolve, reject) => {
     const url = new URL(SERVER_URL + path);
     const options = {
       hostname: url.hostname,
       port: url.port,
-      path: url.pathname,
+      path: url.pathname + url.search,
       method: method,
       headers: {
         "Content-Type": "application/json",
       },
     };
 
-    const req = http.request(options, (res) => {
+    // Use https for https URLs, http for http URLs
+    const requestModule = url.protocol === "https:" ? https : http;
+
+    const req = requestModule.request(options, (res) => {
       let body = "";
       res.on("data", (chunk) => {
         body += chunk;
