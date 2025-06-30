@@ -9,7 +9,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("darkMode");
-    return saved ? JSON.parse(saved) : false;
+    return saved ? JSON.parse(saved) : true;
   });
 
   // API Base URL - Use environment variable or default to Render deployment
